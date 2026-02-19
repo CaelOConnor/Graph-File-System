@@ -5,13 +5,13 @@ from PySide6.QtCore import Qt, QPointF, QRectF
 from PySide6.QtWidgets import QApplication, QWidget, QGridLayout
 import sys
 
-class HexButton(QPushButton):
+class CircleButton(QPushButton):
     def __init__(self, text="", parent=None):
         super().__init__(text, parent)
         self.setCheckable(False)
         self.setMinimumSize(60, 60)
 
-    def hexagonPath(self):
+    def circlePath(self):
         # create a path in the shape of a hexagon
         # it's a function because it needs to be recreated with the right pen/brush
         rect = QRectF(self.rect())
@@ -22,22 +22,8 @@ class HexButton(QPushButton):
         cy = rect.center().y()
         r = min(w, h) / 2 # radius, half the width or height
 
-
-        
-        points = [
-            QPointF(cx + r * 0.5, cy - r), # bottom right
-            QPointF(cx + r,       cy), # middle right
-            QPointF(cx + r * 0.5, cy + r), # top right
-            QPointF(cx - r * 0.5, cy + r), # top left
-            QPointF(cx - r,       cy), # middle left
-            QPointF(cx - r * 0.5, cy - r), # bottom left
-        ]
-
         path = QPainterPath()
-        path.moveTo(points[0])
-        for p in points[1:]:
-            path.lineTo(p)
-        path.closeSubpath()
+        path.addEllipse(QPointF(cx, cy,), r,r)
 
         return path
 
@@ -45,7 +31,7 @@ class HexButton(QPushButton):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
 
-        path = self.hexagonPath()
+        path = self.circlePath()
 
         # Background color by state
         if self.isDown() or self.isChecked():
@@ -64,7 +50,7 @@ class HexButton(QPushButton):
         painter.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter, self.text())
 
     def hitButton(self, pos):
-        return self.hexagonPath().contains(QPointF(pos))
+        return self.circlePath().contains(QPointF(pos))
 
 
 if __name__=='__main__':
@@ -74,16 +60,16 @@ if __name__=='__main__':
     window = QWidget()
     layout = QGridLayout(window)
 
-    btn = HexButton("Hex1")
+    btn = CircleButton("Hex1")
     layout.addWidget(btn, 1, 1)
 
-    btn = HexButton("Hex2")
+    btn = CircleButton("Hex2")
     layout.addWidget(btn, 1, 3)
 
-    btn = HexButton("Hex3")
+    btn = CircleButton("Hex3")
     layout.addWidget(btn, 3, 2)
 
-    btn = HexButton("Hex4")
+    btn = CircleButton("Hex4")
     layout.addWidget(btn, 3, 4)
 
     window.show()
