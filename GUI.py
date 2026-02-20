@@ -4,6 +4,7 @@ import sys
 from PyQt6.QtCore import QSize, Qt
 from PyQt6.QtGui import QColor, QPainter
 from PyQt6.QtWidgets import QApplication, QMainWindow, QPushButton, QScrollArea, QWidget
+from pyqt_circle_button import CircleButton
 
 focus_node_radius = 100
 reg_node_radius = 50
@@ -40,6 +41,18 @@ class paintData(QWidget):
     def __init__(self, data):
         super().__init__()
         self.data = data
+        self.resize(800,600)
+
+        self.root_node = QPushButton("Root Node", self)
+        self.root_node.resize(200,100)
+        self.center_root_node()
+
+    def center_root_node(self):
+        cx = self.width() // 2
+        cy = self.height() // 2
+        root_node_width = self.root_node.width()
+        root_node_height = self.root_node.height()
+        self.root_node.move(cx - root_node_width//2, cy - root_node_height//2)
     
     def create_nodes(self, data):
         node = makeNode(data, self)
@@ -101,11 +114,12 @@ class MainWindow(QScrollArea):
 
         self.setWindowTitle("Graph File System")
 
-        button = QPushButton("Press Me!")
-        button.setMinimumSize(QSize(2000, 1000))
+        # button = QPushButton("Press Me!")
+        # button.setMinimumSize(QSize(2000, 1000))
 
         self.setMinimumSize(QSize(800, 600))
-        self.setWidget(button)
+
+        self.setWidget(paint)
 
 if __name__ == "__main__":
     root = os.path.join(os.getcwd(), "..")
