@@ -1,9 +1,9 @@
 import os
 import sys
 
-from PyQt6.QtCore import QSize, Qt
-from PyQt6.QtGui import QColor, QPainter
-from PyQt6.QtWidgets import QApplication, QMainWindow, QPushButton, QScrollArea, QWidget
+from PySide6.QtCore import QSize, Qt
+from PySide6.QtGui import QColor, QPainter
+from PySide6.QtWidgets import QApplication, QMainWindow, QPushButton, QScrollArea, QWidget, QLineEdit
 from pyqt_circle_button import CircleButton
 
 focus_node_radius = 100
@@ -41,11 +41,25 @@ class paintData(QWidget):
     def __init__(self, data):
         super().__init__()
         self.data = data
-        self.resize(800,600)
+        self.resize(1200, 800)
 
-        self.root_node = QPushButton("Root Node", self)
-        self.root_node.resize(200,100)
+        self.root_node = CircleButton("Root Node", self)
+        self.root_node.resize(100,100)
         self.center_root_node()
+
+        self.search_bar = QLineEdit(self)
+        self.search_bar.setPlaceholderText("Search:")
+        self.search_bar.resize(100, 30)
+
+        self.add_button = QPushButton("+", self)
+        self.add_button.resize(30,30)
+
+        self.move_ui_to_top_right()
+
+    def move_ui_to_top_right(self):
+        self.search_bar.move(self.width() - self.search_bar.width(), self.add_button.height() - self.search_bar.height())
+        
+        self.add_button.move(self.width() - self.add_button.width() - self.search_bar.width(), self.add_button.height() - self.search_bar.height())
 
     def center_root_node(self):
         cx = self.width() // 2
@@ -117,8 +131,7 @@ class MainWindow(QScrollArea):
         # button = QPushButton("Press Me!")
         # button.setMinimumSize(QSize(2000, 1000))
 
-        self.setMinimumSize(QSize(800, 600))
-
+        self.setMinimumSize(QSize(1200, 800))
         self.setWidget(paint)
 
 if __name__ == "__main__":

@@ -54,7 +54,6 @@ class CircleButton(QPushButton):
 
 
 if __name__=='__main__':
-
     app = QApplication(sys.argv)
 
     window = QWidget()
