@@ -102,7 +102,8 @@ class makeNode(CircleButton):
         super().mouseDoubleClickEvent(event)
 
     def open_outer_node(self):
-        pass
+        if os.path.isfile(self.node_data["path"]):
+            os.startfile(self.node_data["path"])
 
 #Painting graph onto GUI
 class paintData(QWidget):
@@ -223,7 +224,7 @@ class MainWindow(QScrollArea):
         # button = QPushButton("Press Me!")
         # button.setMinimumSize(QSize(2000, 1000))
 
-        self.setMinimumSize(QSize(800, 600))
+        self.setMinimumSize(QSize(1200, 800))
 
         self.setWidget(paint)
 
