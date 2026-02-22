@@ -1,9 +1,9 @@
 import os
 import sys
 
-from PySide6.QtCore import QSize, Qt
-from PySide6.QtGui import QColor, QPainter
-from PySide6.QtWidgets import QApplication, QMainWindow, QPushButton, QScrollArea, QWidget, QLineEdit
+from PyQt6.QtCore import QPointF, QRectF, QSize, Qt
+from PyQt6.QtGui import QBrush, QColor, QPainter, QPainterPath, QPen
+from PyQt6.QtWidgets import QApplication, QMainWindow, QPushButton, QScrollArea, QWidget
 from pyqt_circle_button import CircleButton
 
 focus_node_radius = 100
@@ -36,88 +36,166 @@ def build_tree(path, parent=None):
             node["children"].append(build_tree(child_path, node))
     return node
 
+#Taken hex button and turned into circles
+class CircleButton(QPushButton):
+    def __init__(self, text="", parent=None, color=node_color):
+        super().__init__(text, parent)
+        self.setCheckable(False)
+        self.setMinimumSize(60, 60)
+        self.color = color
+
+    def circlePath(self):
+        # create a path in the shape of a hexagon
+        # it's a function because it needs to be recreated with the right pen/brush
+        rect = QRectF(self.rect())
+
+        w = rect.width()
+        h = rect.height()
+        cx = rect.center().x()
+        cy = rect.center().y()
+        r = min(w, h) / 2 # radius, half the width or height
+
+        path = QPainterPath()
+        path.addEllipse(QPointF(cx, cy,), r,r)
+
+        return path
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+        path = self.circlePath()
+
+        if self.isDown():
+            brush = QBrush(QColor(50,50,50))
+        else:
+            brush = QBrush(self.color)
+
+        painter.setBrush(brush)
+        painter.setPen(QPen(Qt.GlobalColor.black, 2))
+        painter.drawPath(path)
+
+        painter.setPen(Qt.GlobalColor.black)
+        painter.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter, self.text())
+
+    def hitButton(self, pos):
+        return self.circlePath().contains(QPointF(pos))
+    
+#Separate class for making nodes
+class makeNode(CircleButton):
+    def __init__(self, node_data, paint, parent=None):
+        super().__init__(node_data["name"], parent or paint)
+        self.node_data = node_data
+        self.paint = paint
+        self.color = QColor(outer_node_color if self.is_outer_node() else node_color)
+        self.clicked.connect(self.on_clicked)
+
+    def is_outer_node(self):
+        return not self.node_data["is_dir"]
+
+    def on_clicked(self):
+        self.paint.node_clicked(self)
+
+    def mouseDoubleClickEvent(self, event):
+        if self.is_outer_node():
+            self.open_outer_node()
+        super().mouseDoubleClickEvent(event)
+
+    def open_outer_node(self):
+        pass
+
 #Painting graph onto GUI
 class paintData(QWidget):
     def __init__(self, data):
         super().__init__()
-        self.data = data
-        self.resize(1200, 800)
+        self.setFixedSize(1600, 1200)
 
-        self.root_node = CircleButton("Root Node", self)
-        self.root_node.resize(100,100)
-        self.center_root_node()
+        self.all_nodes  = {}
+        self.focus_node = None
 
-        self.search_bar = QLineEdit(self)
-        self.search_bar.setPlaceholderText("Search:")
-        self.search_bar.resize(100, 30)
+        self.build_all_nodes(data, parent_widget=None)
 
-        self.add_button = QPushButton("+", self)
-        self.add_button.resize(30,30)
+        root_widget = self.all_nodes[data["path"]]
+        self.set_focus_node(root_widget)
 
-        self.move_ui_to_top_right()
+#Recursively makes all the nodes we will need and stores them
+    def build_all_nodes(self, data, parent_widget):
+        node = makeNode(data, self, parent=self)
+        self.all_nodes[data["path"]] = node
+        for child in data["children"]:
+            self.build_all_nodes(child, node)
 
-    def move_ui_to_top_right(self):
-        self.search_bar.move(self.width() - self.search_bar.width(), self.add_button.height() - self.search_bar.height())
-        
-        self.add_button.move(self.width() - self.add_button.width() - self.search_bar.width(), self.add_button.height() - self.search_bar.height())
+    def set_focus_node(self, node):
+#Hides all nodes and resets their size so they can be redone with new focus
+        for n in self.all_nodes.values():
+            n.hide()
+            n.setFixedSize(reg_node_radius * 2, reg_node_radius * 2)
 
-    def center_root_node(self):
-        cx = self.width() // 2
+        self.focus_node = node
+
+        cx = self.width()  // 2
         cy = self.height() // 2
-        root_node_width = self.root_node.width()
-        root_node_height = self.root_node.height()
-        self.root_node.move(cx - root_node_width//2, cy - root_node_height//2)
-    
-    def create_nodes(self, data):
-        node = makeNode(data, self)
 
-    def set_focus_node(node):
-        pass
+        node.setFixedSize(focus_node_radius * 2, focus_node_radius * 2)
+        node.move(cx - focus_node_radius, cy - focus_node_radius)
+        node.show()
 
+#Puts parent of focus above
+        parent_data = node.node_data.get("parent")
+        if parent_data:
+            pw = self.all_nodes.get(parent_data["path"])
+            if pw:
+                pw.move(cx - reg_node_radius, cy - edge_length - reg_node_radius)
+                pw.show()
+
+#Spreads the children of focus out beneath
+        children = node.node_data["children"]
+        n_children = len(children)
+        if n_children:
+            total = (n_children - 1) * edge_length
+            start_x = cx - total // 2
+            for i, child_data in enumerate(children):
+                cw = self.all_nodes.get(child_data["path"])
+                if cw:
+                    cw.move(start_x + i * edge_length - reg_node_radius,
+                            cy + edge_length - reg_node_radius)
+                    cw.show()
+
+        self.update()
+
+#If a node is clicked make the focus if not a file
     def node_clicked(self, node):
-        if node.is_outer_node():
-            node.open_outer_node()
-        else:
+        if not node.is_outer_node():
             self.set_focus_node(node)
+            
 
-    def paint_edges(self, event):
+    def paintEvent(self, event):
+#Settings and coordinates for painting edges
+        if not self.focus_node:
+            return
         painter = QPainter(self)
-        painter.setRenderHint(QPainter.Antialiasing)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setPen(QPen(QColor(edge_color), 2))
 
-#Separate class for making nodes
-class makeNode(QWidget):
-    def __init__(self, node_data, paint):
-        super().__init__(paint)
-        self.node_data = node_data
-        self.paint = paint
+        def centre(w):
+            return w.x() + w.width() // 2, w.y() + w.height() // 2
 
-    def place_node(self):
-        pass
+        fx, fy = centre(self.focus_node)
 
-    def is_outer_node(self):
-        return not self.node_data["is_dir"]
-    
-    def paint_node(self, event):
-        painter = QPainter(self)
-        painter.setRenderHint(QPainter.Antialiasing)
+#Makes edge from parent to focus node
+        parent_data = self.focus_node.node_data.get("parent")
+        if parent_data:
+            pw = self.all_nodes.get(parent_data["path"])
+            if pw and pw.isVisible():
+                px, py = centre(pw)
+                painter.drawLine(fx, fy, px, py)
 
-    def mouseReleaseEvent(self, event):
-        if event.button() == Qt.MouseButton.LeftButton:
-            self.paint.node_clicked(self)
-        super().mouseReleaseEvent(event)
-
-    def mouseDoubleClickEvent(self, event):
-        if self.is_file():
-            self.open_file()
-        super().mouseDoubleClickEvent(event)
-
-    def open_outer_node(self):
-        try:
-            with open(self.node_data["path"], 'r') as file:
-                info = file.read()
-                print(info)
-        except Exception as e:
-            print("Error reading file")
+#Creates all the edges from the focus node to its children
+        for child_data in self.focus_node.node_data["children"]:
+            cw = self.all_nodes.get(child_data["path"])
+            if cw and cw.isVisible():
+                cx, cy = centre(cw)
+                painter.drawLine(fx, fy, cx, cy)
 
 
 #Adding painting to scrollable window
@@ -131,8 +209,17 @@ class MainWindow(QScrollArea):
         # button = QPushButton("Press Me!")
         # button.setMinimumSize(QSize(2000, 1000))
 
-        self.setMinimumSize(QSize(1200, 800))
+        self.setMinimumSize(QSize(800, 600))
+
         self.setWidget(paint)
+
+#Centers the root node at the start
+    def showEvent(self, event):
+        super().showEvent(event)
+        cx = self.widget().width() // 2
+        cy = self.widget().height() // 2
+        self.horizontalScrollBar().setValue(cx - self.width() // 2)
+        self.verticalScrollBar().setValue(cy - self.height() // 2)
 
 if __name__ == "__main__":
     root = os.path.join(os.getcwd(), "..")
