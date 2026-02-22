@@ -114,11 +114,7 @@ class paintData(QWidget):
         self.all_nodes  = {}
         self.focus_node = None
 
-        self.build_all_nodes(data, parent_widget=None)
-
-        root_widget = self.all_nodes[data["path"]]
-        self.set_focus_node(root_widget)
-
+        # ui
         self.search_bar = QLineEdit(self)
         self.search_bar.setPlaceholderText("Search:")
         self.search_bar.resize(100, 30)
@@ -126,8 +122,77 @@ class paintData(QWidget):
         self.add_button = QPushButton("+", self)
         self.add_button.resize(30,30)
 
+        self.add_outer_node_button = QPushButton("add outer node", self)
+        self.add_outer_node_button.resize(130,30)
+        self.add_outer_node_button.hide()
+        self.add_node_button = QPushButton("add node", self)
+        self.add_node_button.resize(130,30)
+        self.add_node_button.hide()
+
+        self.add_outer_node_button.clicked.connect(self.add_file)
+        self.add_node_button.clicked.connect(self.add_folder)
+
+        self.add_button.clicked.connect(self.show_add_buttons)
         self.move_ui_to_top_right()
 
+        # nodes
+        self.build_all_nodes(data, parent_widget=None)
+        root_widget = self.all_nodes[data["path"]]
+        self.set_focus_node(root_widget)
+
+    # adds folder
+    def add_folder(self, attempt=0):
+        if not self.focus_node.node_data["is_dir"]:
+            return
+        parent_path = self.focus_node.node_data["path"]
+        name = "New Folder"
+        if attempt > 0:
+            name += f"({attempt})"
+        
+        new_path = os.path.join(parent_path, name)
+        try:
+            os.mkdir(new_path)
+        except:
+            self.add_folder(attempt + 1)
+            return
+
+        
+    # adds file
+    def add_file(self, attempt=0):
+        if not self.focus_node.node_data["is_dir"]:
+            return
+        parent_path = self.focus_node.node_data["path"]
+        name = "New Folder"
+        if attempt > 0:
+            name += f"({attempt})"
+        name += ".txt"
+        
+        new_path = os.path.join(parent_path, name)
+        try:
+            with open(new_path, 'w') as f:
+                f.write(".")
+        except:
+            self.add_folder(attempt + 1)
+            return
+    
+    # for the add outer node and add node buttons
+    def show_add_buttons(self):
+        if not self.focus_node.node_data["is_dir"]:
+            return
+        
+        visible = self.add_outer_node_button.isVisible()
+        if visible:
+            self.add_outer_node_button.hide()
+            self.add_node_button.hide()
+        else:
+            x = self.add_button.x()
+            y = self.add_button.y()
+            self.add_outer_node_button.move(x, y + 30)
+            self.add_node_button.move(x, y + 60)
+            self.add_outer_node_button.show()
+            self.add_node_button.show()
+
+    # moves search bar and add button to top right
     def move_ui_to_top_right(self):
         self.search_bar.move(self.width() - self.search_bar.width(), self.add_button.height() - self.search_bar.height())
         
@@ -154,6 +219,10 @@ class paintData(QWidget):
         node.setFixedSize(focus_node_radius * 2, focus_node_radius * 2)
         node.move(cx - focus_node_radius, cy - focus_node_radius)
         node.show()
+
+        # for hiding add buttons
+        self.add_outer_node_button.hide()
+        self.add_node_button.hide()
 
 #Puts parent of focus above
         parent_data = node.node_data.get("parent")
