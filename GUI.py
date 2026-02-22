@@ -135,10 +135,21 @@ class paintData(QWidget):
         self.add_button.clicked.connect(self.show_add_buttons)
         self.move_ui_to_top_right()
 
+        self.search_bar.textChanged.connect(self.search)
+
         # nodes
         self.build_all_nodes(data, parent_widget=None)
         root_widget = self.all_nodes[data["path"]]
         self.set_focus_node(root_widget)
+
+    # search bar
+    def search(self, text):
+        for node in self.all_nodes.values():
+            if node.node_data["is_dir"]:
+                name = node.node_data["name"]
+                if name == text:
+                    self.set_focus_node(node)
+                    return
 
     # adds folder
     def add_folder(self, attempt=0):
