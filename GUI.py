@@ -3,7 +3,7 @@ import sys
 
 from PyQt6.QtCore import QPointF, QRectF, QSize, Qt
 from PyQt6.QtGui import QBrush, QColor, QPainter, QPainterPath, QPen
-from PyQt6.QtWidgets import QApplication, QMainWindow, QPushButton, QScrollArea, QWidget
+from PyQt6.QtWidgets import QApplication, QLineEdit, QMainWindow, QPushButton, QScrollArea, QWidget
 from pyqt_circle_button import CircleButton
 
 focus_node_radius = 100
@@ -117,6 +117,20 @@ class paintData(QWidget):
 
         root_widget = self.all_nodes[data["path"]]
         self.set_focus_node(root_widget)
+
+        self.search_bar = QLineEdit(self)
+        self.search_bar.setPlaceholderText("Search:")
+        self.search_bar.resize(100, 30)
+
+        self.add_button = QPushButton("+", self)
+        self.add_button.resize(30,30)
+
+        self.move_ui_to_top_right()
+
+    def move_ui_to_top_right(self):
+        self.search_bar.move(self.width() - self.search_bar.width(), self.add_button.height() - self.search_bar.height())
+        
+        self.add_button.move(self.width() - self.add_button.width() - self.search_bar.width(), self.add_button.height() - self.search_bar.height())
 
 #Recursively makes all the nodes we will need and stores them
     def build_all_nodes(self, data, parent_widget):
