@@ -1,5 +1,6 @@
 import os
 import sys
+import subprocess
 
 from PySide6.QtCore import QPointF, QRectF, QSize, Qt
 from PySide6.QtGui import QBrush, QColor, QPainter, QPainterPath, QPen
@@ -102,8 +103,16 @@ class makeNode(CircleButton):
         super().mouseDoubleClickEvent(event)
 
     def open_outer_node(self):
-        if os.path.isfile(self.node_data["path"]):
-            os.startfile(self.node_data["path"])
+        path = self.node_data["path"]
+        try:
+            if sys.platform == "darwin":
+                subprocess.Popen(["open", path])
+            elif sys.platform == "win32":
+                os.startfile(path)
+            else:
+                subprocess.Popen(["xdg-open", path])
+        except Exception as e:
+            print(f"Error opening file: {e}")
         
     # for right clicking nodes
     def contextMenuEvent(self, event):
@@ -202,8 +211,12 @@ class paintData(QWidget):
 
     # refreshes tree used for adding folder/file and deleting and moving
     def refresh_screen(self, focus_path):
+        for node in self.all_nodes.values():
+            node.deleteLater()
+        self.all_nodes = {}
         data = build_tree(self.root_path)
         self.build_all_nodes(data, parent_widget=None)
+        self.set_focus_node(self.all_nodes[focus_path])
 
     # search bar
     def search(self, text):
