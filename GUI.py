@@ -1,9 +1,9 @@
 import os
 import sys
 
-from PyQt6.QtCore import QPointF, QRectF, QSize, Qt
-from PyQt6.QtGui import QBrush, QColor, QPainter, QPainterPath, QPen
-from PyQt6.QtWidgets import QApplication, QLineEdit, QMainWindow, QPushButton, QScrollArea, QWidget
+from PySide6.QtCore import QPointF, QRectF, QSize, Qt
+from PySide6.QtGui import QBrush, QColor, QPainter, QPainterPath, QPen
+from PySide6.QtWidgets import QApplication, QLineEdit, QMainWindow, QPushButton, QScrollArea, QWidget
 from pyqt_circle_button import CircleButton
 
 focus_node_radius = 100
@@ -104,6 +104,11 @@ class makeNode(CircleButton):
     def open_outer_node(self):
         if os.path.isfile(self.node_data["path"]):
             os.startfile(self.node_data["path"])
+        
+    # for right clicking nodes
+    def contextMenuEvent(self, event):
+        self.paint.show_action_buttons(self)
+        return super().contextMenuEvent(event)
 
 #Painting graph onto GUI
 class paintData(QWidget):
@@ -113,6 +118,7 @@ class paintData(QWidget):
 
         self.all_nodes  = {}
         self.focus_node = None
+        self.root_path = data["path"]
 
         # ui
         self.search_bar = QLineEdit(self)
@@ -137,10 +143,67 @@ class paintData(QWidget):
 
         self.search_bar.textChanged.connect(self.search)
 
+        # delete and move buttons when right clicking
+        self.move_button = QPushButton("Move node", self)
+        self.move_button.resize(100,30)
+        self.move_button.hide()
+        self.delete_button = QPushButton("Delete node", self)
+        self.delete_button.resize(100,30)
+        self.delete_button.hide()
+        self.move_button.clicked.connect(self.move_node)
+        self.delete_button.clicked.connect(self.delete_node)
+        self.right_clicked = None
+
         # nodes
         self.build_all_nodes(data, parent_widget=None)
         root_widget = self.all_nodes[data["path"]]
         self.set_focus_node(root_widget)
+
+    def move_node(self):
+        print("move button hit")
+        
+    
+    def delete_node(self):
+        if not self.right_clicked:
+            return 
+        path = self.right_clicked.node_data["path"]
+        try:
+            if os.path.isdir(path):
+                os.rmdir(path)
+            else:
+                os.remove(path)
+        except:
+            print("Error deleting")
+            return
+        parent_path = self.focus_node.node_data["path"]
+        self.hide_action_buttons()
+        self.refresh_screen(parent_path)
+
+    # to hide action buttons after moving or deleting
+    def hide_action_buttons(self):
+        self.move_button.hide()
+        self.delete_button.hide()
+        self.right_clicked = None
+
+    def mouseMoveEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            self.hide_action_buttons()
+        super().mouseMoveEvent(event)
+    
+    # for showing the delete/move buttons
+    def show_action_buttons(self, node):
+        self.right_clicked = node
+        x = node.x() + node.width()
+        y = node.y()
+        self.move_button.move(x,y)
+        self.delete_button.move(x, y+30)
+        self.move_button.show()
+        self.delete_button.show()
+
+    # refreshes tree used for adding folder/file and deleting and moving
+    def refresh_screen(self, focus_path):
+        data = build_tree(self.root_path)
+        self.build_all_nodes(data, parent_widget=None)
 
     # search bar
     def search(self, text):
@@ -166,6 +229,7 @@ class paintData(QWidget):
         except:
             self.add_folder(attempt + 1)
             return
+        self.refresh_screen(parent_path)
 
         
     # adds file
@@ -173,7 +237,7 @@ class paintData(QWidget):
         if not self.focus_node.node_data["is_dir"]:
             return
         parent_path = self.focus_node.node_data["path"]
-        name = "New Folder"
+        name = "New File"
         if attempt > 0:
             name += f"({attempt})"
         name += ".txt"
@@ -185,6 +249,7 @@ class paintData(QWidget):
         except:
             self.add_folder(attempt + 1)
             return
+        self.refresh_screen(parent_path)
     
     # for the add outer node and add node buttons
     def show_add_buttons(self):
