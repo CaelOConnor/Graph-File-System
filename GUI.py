@@ -127,7 +127,7 @@ class MovePopup(QWidget):
         self.setFixedSize(300, 70)
 
         self.move_text = QLineEdit(self)
-        self.move_text.setPlaceholderText("Enter destination folder path...")
+        self.move_text.setPlaceholderText("Where...")
         self.move_text.resize(300, 30)
         self.move_text.move(0, 0)
         self.move_text.textChanged.connect(self.check_dir)
