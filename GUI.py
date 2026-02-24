@@ -1,6 +1,5 @@
 import os
 import sys
-import subprocess
 
 from PySide6.QtCore import QPointF, QRectF, QSize, Qt
 from PySide6.QtGui import QBrush, QColor, QPainter, QPainterPath, QPen
@@ -106,11 +105,11 @@ class makeNode(CircleButton):
         path = self.node_data["path"]
         try:
             if sys.platform == "darwin":
-                subprocess.Popen(["open", path])
+                os.system(f"open '{path}'")
             elif sys.platform == "win32":
                 os.startfile(path)
             else:
-                subprocess.Popen(["xdg-open", path])
+                os.system(f"xdg-open '{path}'")
         except Exception as e:
             print(f"Error opening file: {e}")
         
@@ -118,6 +117,46 @@ class makeNode(CircleButton):
     def contextMenuEvent(self, event):
         self.paint.show_action_buttons(self)
         return super().contextMenuEvent(event)
+
+#Separate class to create move pop up    
+class MovePopup(QWidget):
+    def __init__(self, node, paint, parent=None):
+        super().__init__(parent)
+        self.node = node
+        self.paint = paint
+        self.setFixedSize(300, 70)
+
+        self.move_text = QLineEdit(self)
+        self.move_text.setPlaceholderText("Enter destination folder path...")
+        self.move_text.resize(300, 30)
+        self.move_text.move(0, 0)
+        self.move_text.textChanged.connect(self.check_dir)
+
+        self.confirm_button = QPushButton("Confirm", self)
+        self.confirm_button.resize(300, 30)
+        self.confirm_button.move(0, 35)
+        self.confirm_button.setEnabled(False)
+        self.confirm_button.clicked.connect(self.confirm_move)
+
+    def check_dir(self, text):
+        for node in self.paint.all_nodes.values():
+            if node.node_data["name"] == text and node.node_data["is_dir"]:
+                self.confirm_button.setEnabled(True)
+                self.valid_path = node.node_data["path"]
+                return
+        self.confirm_button.setEnabled(False)
+        self.valid_path = None
+
+    def confirm_move(self):
+        src = self.node.node_data["path"]
+        dst = os.path.join(self.valid_path, self.node.node_data["name"])
+        try:
+            os.rename(src, dst)
+        except Exception as e:
+            print(f"Error moving: {e}")
+            return
+        self.hide()
+        self.paint.refresh_screen(self.paint.focus_node.node_data["path"])
 
 #Painting graph onto GUI
 class paintData(QWidget):
@@ -129,29 +168,6 @@ class paintData(QWidget):
         self.focus_node = None
         self.root_path = data["path"]
 
-        # ui
-        self.search_bar = QLineEdit(self)
-        self.search_bar.setPlaceholderText("Search:")
-        self.search_bar.resize(100, 30)
-
-        self.add_button = QPushButton("+", self)
-        self.add_button.resize(30,30)
-
-        self.add_outer_node_button = QPushButton("add outer node", self)
-        self.add_outer_node_button.resize(130,30)
-        self.add_outer_node_button.hide()
-        self.add_node_button = QPushButton("add node", self)
-        self.add_node_button.resize(130,30)
-        self.add_node_button.hide()
-
-        self.add_outer_node_button.clicked.connect(self.add_file)
-        self.add_node_button.clicked.connect(self.add_folder)
-
-        self.add_button.clicked.connect(self.show_add_buttons)
-        self.move_ui_to_top_right()
-
-        self.search_bar.textChanged.connect(self.search)
-
         # delete and move buttons when right clicking
         self.move_button = QPushButton("Move node", self)
         self.move_button.resize(100,30)
@@ -162,6 +178,7 @@ class paintData(QWidget):
         self.move_button.clicked.connect(self.move_node)
         self.delete_button.clicked.connect(self.delete_node)
         self.right_clicked = None
+        self.popup = None
 
         # nodes
         self.build_all_nodes(data, parent_widget=None)
@@ -169,9 +186,14 @@ class paintData(QWidget):
         self.set_focus_node(root_widget)
 
     def move_node(self):
-        print("move button hit")
+        if not self.right_clicked:
+            return
+        node = self.right_clicked
+        self.hide_action_buttons()
+        self.popup = MovePopup(node, self, parent=self)
+        self.popup.move(node.x() + node.width(), node.y())
+        self.popup.show()
         
-    
     def delete_node(self):
         if not self.right_clicked:
             return 
@@ -193,11 +215,18 @@ class paintData(QWidget):
         self.move_button.hide()
         self.delete_button.hide()
         self.right_clicked = None
+        if self.popup:
+            self.popup.hide()
 
     def mouseMoveEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton:
             self.hide_action_buttons()
         super().mouseMoveEvent(event)
+
+    #hides additional buttons if next click isn't on them
+    def mousePressEvent(self, event):
+        self.hide_action_buttons()
+        super().mousePressEvent(event)
     
     # for showing the delete/move buttons
     def show_action_buttons(self, node):
@@ -235,7 +264,6 @@ class paintData(QWidget):
         name = "New Folder"
         if attempt > 0:
             name += f"({attempt})"
-        
         new_path = os.path.join(parent_path, name)
         try:
             os.mkdir(new_path)
@@ -244,7 +272,6 @@ class paintData(QWidget):
             return
         self.refresh_screen(parent_path)
 
-        
     # adds file
     def add_file(self, attempt=0):
         if not self.focus_node.node_data["is_dir"]:
@@ -254,7 +281,6 @@ class paintData(QWidget):
         if attempt > 0:
             name += f"({attempt})"
         name += ".txt"
-        
         new_path = os.path.join(parent_path, name)
         try:
             with open(new_path, 'w') as f:
@@ -263,12 +289,11 @@ class paintData(QWidget):
             self.add_folder(attempt + 1)
             return
         self.refresh_screen(parent_path)
-    
+
     # for the add outer node and add node buttons
     def show_add_buttons(self):
         if not self.focus_node.node_data["is_dir"]:
             return
-        
         visible = self.add_outer_node_button.isVisible()
         if visible:
             self.add_outer_node_button.hide()
@@ -280,12 +305,6 @@ class paintData(QWidget):
             self.add_node_button.move(x, y + 60)
             self.add_outer_node_button.show()
             self.add_node_button.show()
-
-    # moves search bar and add button to top right
-    def move_ui_to_top_right(self):
-        self.search_bar.move(self.width() - self.search_bar.width(), self.add_button.height() - self.search_bar.height())
-        
-        self.add_button.move(self.width() - self.add_button.width() - self.search_bar.width(), self.add_button.height() - self.search_bar.height())
 
 #Recursively makes all the nodes we will need and stores them
     def build_all_nodes(self, data, parent_widget):
@@ -308,10 +327,6 @@ class paintData(QWidget):
         node.setFixedSize(focus_node_radius * 2, focus_node_radius * 2)
         node.move(cx - focus_node_radius, cy - focus_node_radius)
         node.show()
-
-        # for hiding add buttons
-        self.add_outer_node_button.hide()
-        self.add_node_button.hide()
 
 #Puts parent of focus above
         parent_data = node.node_data.get("parent")
@@ -340,7 +355,6 @@ class paintData(QWidget):
     def node_clicked(self, node):
         if not node.is_outer_node():
             self.set_focus_node(node)
-            
 
     def paintEvent(self, event):
 #Settings and coordinates for painting edges
@@ -376,23 +390,61 @@ class MainWindow(QScrollArea):
     def __init__(self, paint):
         super().__init__()
         self.paint = paint
-
         self.setWindowTitle("Graph File System")
-
-        # button = QPushButton("Press Me!")
-        # button.setMinimumSize(QSize(2000, 1000))
-
         self.setMinimumSize(QSize(1200, 800))
-
         self.setWidget(paint)
 
-#Centers the root node at the start
+        # ui
+        self.search_bar = QLineEdit(self)
+        self.search_bar.setPlaceholderText("Search:")
+        self.search_bar.resize(100, 30)
+
+        self.add_button = QPushButton("+", self)
+        self.add_button.resize(30,30)
+
+        self.add_outer_node_button = QPushButton("add outer node", self)
+        self.add_outer_node_button.resize(130,30)
+        self.add_outer_node_button.hide()
+        self.add_node_button = QPushButton("add node", self)
+        self.add_node_button.resize(130,30)
+        self.add_node_button.hide()
+
+        self.add_outer_node_button.clicked.connect(self.paint.add_file)
+        self.add_node_button.clicked.connect(self.paint.add_folder)
+        self.add_button.clicked.connect(self.show_add_buttons)
+        self.search_bar.textChanged.connect(self.paint.search)
+
+        self.move_ui_to_top_right()
+
+    # moves search bar and add button to top right
+    def move_ui_to_top_right(self):
+        self.search_bar.move(self.width() - self.search_bar.width(), self.add_button.height() - self.search_bar.height())
+        self.add_button.move(self.width() - self.add_button.width() - self.search_bar.width(), self.add_button.height() - self.search_bar.height())
+
+    # for the add outer node and add node buttons
+    def show_add_buttons(self):
+        if not self.paint.focus_node.node_data["is_dir"]:
+            return
+        visible = self.add_outer_node_button.isVisible()
+        if visible:
+            self.add_outer_node_button.hide()
+            self.add_node_button.hide()
+        else:
+            x = self.add_button.x()
+            y = self.add_button.y()
+            self.add_outer_node_button.move(x, y + 30)
+            self.add_node_button.move(x, y + 60)
+            self.add_outer_node_button.show()
+            self.add_node_button.show()
+
+    #Centers the root node at the start
     def showEvent(self, event):
         super().showEvent(event)
         cx = self.widget().width() // 2
         cy = self.widget().height() // 2
         self.horizontalScrollBar().setValue(cx - self.width() // 2)
         self.verticalScrollBar().setValue(cy - self.height() // 2)
+
 
 if __name__ == "__main__":
     root = os.path.join(os.getcwd(), "..")
@@ -401,5 +453,4 @@ if __name__ == "__main__":
     paint = paintData(root_data)
     window = MainWindow(paint)
     window.show()
-
     sys.exit(app.exec())
